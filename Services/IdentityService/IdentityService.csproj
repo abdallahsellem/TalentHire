@@ -27,7 +27,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\JobService\JobService.csproj" />
   </ItemGroup>
 
 </Project>

@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using TalentHire.Services.IdentityService.Interfaces;
 using TalentHire.Services.IdentityService.DTOs;
-using TalentHire.Models;
 namespace TalentHire.Services.IdentityService.Controllers
 {
 

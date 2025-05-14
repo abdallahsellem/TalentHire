@@ -2,7 +2,6 @@ using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Collections.Generic;
-using TalentHire.Services.JobService.Models;
 namespace TalentHire.Services.IdentityService.Models
 {
         public enum userRoles
@@ -25,9 +24,9 @@ namespace TalentHire.Services.IdentityService.Models
 
         public userRoles Role { get; set; } = userRoles.User; // Default role is "User"
 
-        public List<Job> Jobs { get; set; } = new(); // Navigation property for jobs posted by the user
+        public List<int> JobsID { get; set; } = new(); // Navigation property for jobs posted by the user
 
-        public List<Job> AppliedJobs { get; set; } = new(); // Navigation property for jobs applied by the user
+        public List<int> AppliedJobsID { get; set; } = new(); // Navigation property for jobs applied by the user
 
         public List<Credentials> Credentials { get; set; } = new(); // Navigation property for credentials
     }

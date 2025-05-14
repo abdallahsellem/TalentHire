@@ -2,7 +2,6 @@ using TalentHire.Services.IdentityService.DTOs;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
-using TalentHire.Models;
 using TalentHire.Services.IdentityService.Interfaces;
 using System.Text;
 using System.Security.Cryptography;
