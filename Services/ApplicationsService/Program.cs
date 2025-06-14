@@ -5,26 +5,27 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using TalentHire.Services.ApplicationsService.Data;
-using TalentHire.Services.JobService.Mapper;
+using TalentHire.Services.ApplicationsService.Repositories;
+using TalentHire.Services.ApplicationsService.Mapper;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddControllers();
+
+// Add Database Context
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseNpgsql(builder.Configuration.GetConnectionString("DBConnection")));
-var mapperConfig = new MapperConfiguration(cfg =>
-            {
-                cfg.AddProfile<MapperProfile>();
-            });
-// Create the mapper and register it as a singleton
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DBConnection")));
 
-IMapper mapper = mapperConfig.CreateMapper();
-builder.Services.AddSingleton(mapper);
+// Add AutoMapper
+builder.Services.AddAutoMapper(typeof(ApplicationMapperProfile));
 
+// Add Repository
+builder.Services.AddScoped<IApplicationRepository, ApplicationRepository>();
 
+// Add JWT Authentication
 var secretKey = builder.Configuration.GetSection("JwtSettings")["SecretKey"];
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -34,7 +35,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
             ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
-            ValidAudience = builder.Configuration["JwtSettings:Audience"], // Add this line
+            ValidAudience = builder.Configuration["JwtSettings:Audience"],
             ValidateIssuer = true,
             ValidateAudience = true,
             ValidateLifetime = true,

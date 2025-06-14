@@ -8,7 +8,7 @@ namespace TalentHire.Services.ApplicationsService.Data
 
         // Add DbSets for each entity
 
-        public DbSet<Application> Jobs { get; set; }
+        public DbSet<Application> Applications { get; set; }
        
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
