@@ -8,6 +8,7 @@
       ],
       "UpstreamPathTemplate": "/jobs/{everything}",
       "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ]
+      
     },
     {
       "DownstreamPathTemplate": "/api/auth/{everything}",
@@ -16,10 +17,21 @@
         { "Host": "identity-service", "Port": 8082 }
       ],
       "UpstreamPathTemplate": "/auth/{everything}",
-        "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ]
+        "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ],
+        "RateLimitOptions": {
+        "ClientWhitelist": [],
+        "EnableRateLimiting": true,
+        "Period": "1m",
+        "Limit": 5
+      }
     }
   ],
   "GlobalConfiguration": {
-    "BaseUrl": "http://localhost:8080"
+    "BaseUrl": "http://localhost:8080",
+    "RateLimitOptions": {
+      "EnableRateLimiting": true,
+      "QuotaExceededMessage": "Too many requests. Please try again later.",
+      "HttpStatusCode": 429
+    }
   }
 }
