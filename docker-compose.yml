@@ -16,6 +16,7 @@ services:
     depends_on:
       - job-service
       - identity-service
+      - applications-service
     networks:
       - app-network
     working_dir: /app
@@ -82,6 +83,35 @@ services:
       timeout: 10s
       retries: 3
 
+  applications-service:
+    build:
+      context: ./Services/ApplicationsService
+      dockerfile: Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      - NODE_ENV=development
+      - ASPNETCORE_ENVIRONMENT=Development
+    volumes:
+      - ./Services/ApplicationsService:/app
+      - /app/bin
+      - /app/obj
+    depends_on:
+      - applications_db
+    networks:
+      - app-network
+    working_dir: /app
+    command: >
+      sh -c "dotnet ef database update &&
+             dotnet watch run --urls=http://0.0.0.0:8083"
+    expose:
+      - "8083"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   job_db:
     image: postgres:latest
     environment:
@@ -118,9 +148,28 @@ services:
       timeout: 10s
       retries: 3
 
+  applications_db:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: applications_db
+    ports:
+      - "6304:5432"
+    volumes:
+      - applications_db_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   job_db_data:
   identity_db_data:
+  applications_db_data:
 
 networks:
   app-network:
