@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using TalentHire.Services.ApplicationsService.Data;
 using TalentHire.Services.ApplicationsService.Repositories;
 using TalentHire.Services.ApplicationsService.Mapper;
+using TalentHire.Services.ApplicationsService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +26,7 @@ builder.Services.AddAutoMapper(typeof(ApplicationMapperProfile));
 // Add Repository
 builder.Services.AddScoped<IApplicationRepository, ApplicationRepository>();
 
+
 // Add JWT Authentication
 var secretKey = builder.Configuration.GetSection("JwtSettings")["SecretKey"];
 
@@ -42,6 +44,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true
         };
     });
+builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddHttpClient<IJobServiceClient, JobServiceClient>(client =>
+{
+    client.BaseAddress = new Uri("http://job-service/api"); // Use service name or gateway route
+});
 
 builder.Services.AddAuthorization();
 var app = builder.Build();

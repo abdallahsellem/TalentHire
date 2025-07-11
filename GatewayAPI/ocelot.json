@@ -16,7 +16,16 @@
         { "Host": "identity-service", "Port": 8082 }
       ],
       "UpstreamPathTemplate": "/auth/{everything}",
-        "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ]
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ]
+    },
+    {
+      "DownstreamPathTemplate": "/api/applications/{everything}",
+      "DownstreamScheme": "http",
+      "DownstreamHostAndPorts": [
+        { "Host": "applications-service", "Port": 8083 }
+      ],
+      "UpstreamPathTemplate": "/applications/{everything}",
+      "UpstreamHttpMethod": [ "GET", "POST", "PUT", "DELETE" ]
     }
   ],
   "GlobalConfiguration": {

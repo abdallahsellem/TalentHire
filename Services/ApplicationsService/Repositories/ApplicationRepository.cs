@@ -16,6 +16,7 @@ public class ApplicationRepository : IApplicationRepository
 
     public async Task<IEnumerable<Application>> GetAllApplicationsAsync()
     {
+        
         return await _context.Applications
             .OrderByDescending(a => a.ApplicationDate)
             .ToListAsync();
