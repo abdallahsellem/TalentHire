@@ -31,6 +31,7 @@ namespace TalentHire
                 c.SwaggerDoc("v1", new OpenApiInfo { Title = "TalentHire", Version = "v1" });
             });
             var secretKey = _configuration.GetSection("JwtSettings")["SecretKey"];
+            Console.WriteLine(secretKey);
 
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>

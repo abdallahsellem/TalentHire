@@ -708,19 +708,4 @@ cython_debug/
 # Marimo
 marimo/_static/
 marimo/_lsp/
-__marimo__/helper_functions/
-
-# Build and cache files
-**/bin/
-**/obj/
-*.cache
-*.AssemblyInfo.cs
-*.AssemblyInfoInputs.cache
-*.assets.cache
-*.csproj.AssemblyReference.cache
-*.nuget.dgspec.json
-*.nuget.cache
-*.dtmp
-*.assets.json
-*.project.nuget.cache
-Services/IdentityService/obj/Debug/net9.0/IdentityService.AssemblyInfo.cs
+__marimo__/
