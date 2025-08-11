@@ -43,6 +43,7 @@ namespace TalentHire.Services.IdentityService.Services
             // Define claims
             var claims = new[]
             {
+                new Claim(JwtRegisteredClaimNames.Sid, currUser.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Sub, user.Username),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                 new Claim(ClaimTypes.Role, currUser.Role.ToString()) // Add role claim
