@@ -9,6 +9,7 @@ using TalentHire.Services.IdentityService.DTOs;
 using TalentHire.Services.IdentityService.Interfaces;
 using TalentHire.Services.IdentityService.Repositories;
 using TalentHire.Services.IdentityService.Services;
+using TalentHire.Services.IdentityService.Models; // Add this using statement
 
 namespace IdentityService.Tests.Controllers
 {
@@ -65,7 +66,12 @@ namespace IdentityService.Tests.Controllers
                 Role = "User"
             };
 
-            var mockUser = new object(); // Mock user object
+            // Use proper User model instead of object
+            var mockUser = new User 
+            { 
+                Username = "testuser", 
+                Role = userRoles.User 
+            };
             var accessToken = "mock-access-token";
             var refreshToken = "mock-refresh-token";
 
@@ -98,7 +104,7 @@ namespace IdentityService.Tests.Controllers
             };
 
             _mockUserRepository.Setup(r => r.GetUser(userDto.Username, userDto.Password))
-                              .ReturnsAsync((object?)null);
+                              .ReturnsAsync((User?)null);
 
             // Act
             var result = await _controller.Login(userDto);
@@ -119,7 +125,7 @@ namespace IdentityService.Tests.Controllers
             };
 
             _mockUserRepository.Setup(r => r.GetUser(userDto.Username, userDto.Password))
-                              .ReturnsAsync((object?)null);
+                              .ReturnsAsync((User?)null);
 
             // Act
             var result = await _controller.Login(userDto);
@@ -140,7 +146,7 @@ namespace IdentityService.Tests.Controllers
             };
 
             _mockUserRepository.Setup(r => r.GetUser(userDto.Username, userDto.Password))
-                              .ReturnsAsync((object?)null);
+                              .ReturnsAsync((User?)null);
 
             // Act
             var result = await _controller.Login(userDto);
@@ -160,7 +166,11 @@ namespace IdentityService.Tests.Controllers
                 Role = "User"
             };
 
-            var mockUser = new object();
+            var mockUser = new User 
+            { 
+                Username = "testuser", 
+                Role = userRoles.User 
+            };
             _mockUserRepository.Setup(r => r.GetUser(userDto.Username, userDto.Password))
                               .ReturnsAsync(mockUser);
             _mockTokenService.Setup(t => t.CreateAccessTokenAsync(userDto))
@@ -185,8 +195,14 @@ namespace IdentityService.Tests.Controllers
                 Role = "User"
             };
 
+            var createdUser = new User 
+            { 
+                Username = "newuser", 
+                Role = userRoles.User 
+            };
+
             _mockUserRepository.Setup(r => r.CreateUser(userDto.Username, userDto.Password, userDto.Role))
-                              .Returns(Task.CompletedTask);
+                              .ReturnsAsync(createdUser);
 
             // Act
             var result = await _controller.Register(userDto);
@@ -225,8 +241,14 @@ namespace IdentityService.Tests.Controllers
                 Role = "User"
             };
 
+            var createdUser = new User 
+            { 
+                Username = "", 
+                Role = userRoles.User 
+            };
+
             _mockUserRepository.Setup(r => r.CreateUser(userDto.Username, userDto.Password, userDto.Role))
-                              .Returns(Task.CompletedTask);
+                              .ReturnsAsync(createdUser);
 
             // Act
             var result = await _controller.Register(userDto);
@@ -248,8 +270,14 @@ namespace IdentityService.Tests.Controllers
                 Role = "User"
             };
 
+            var createdUser = new User 
+            { 
+                Username = "newuser", 
+                Role = userRoles.User 
+            };
+
             _mockUserRepository.Setup(r => r.CreateUser(userDto.Username, userDto.Password, userDto.Role))
-                              .Returns(Task.CompletedTask);
+                              .ReturnsAsync(createdUser);
 
             // Act
             var result = await _controller.Register(userDto);
@@ -271,8 +299,14 @@ namespace IdentityService.Tests.Controllers
                 Role = null
             };
 
+            var createdUser = new User 
+            { 
+                Username = "newuser", 
+                Role = userRoles.User // Default to User role instead of null
+            };
+
             _mockUserRepository.Setup(r => r.CreateUser(userDto.Username, userDto.Password, userDto.Role))
-                              .Returns(Task.CompletedTask);
+                              .ReturnsAsync(createdUser);
 
             // Act
             var result = await _controller.Register(userDto);

@@ -9,7 +9,7 @@ using TalentHire.Services.ApplicationsService.DTOs;
 using TalentHire.Services.ApplicationsService.Models;
 using TalentHire.Services.ApplicationsService.Repositories;
 using TalentHire.Services.ApplicationsService.Services;
-using ApplicationsService.Controllers;
+using TalentHire.Services.ApplicationsService.Controllers;
 using IdentityModel;
 
 namespace ApplicationsService.Tests.Controllers
@@ -85,19 +85,6 @@ namespace ApplicationsService.Tests.Controllers
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
             var returnedApplications = Assert.IsAssignableFrom<IEnumerable<ApplicationDto>>(okResult.Value);
             Assert.Equal(2, returnedApplications.Count());
-        }
-
-        [Fact]
-        public async Task GetApplications_NonAdminRole_ReturnsForbid()
-        {
-            // Arrange
-            SetupControllerContext("User");
-
-            // Act
-            var result = await _controller.GetApplications();
-
-            // Assert
-            Assert.IsType<ForbidResult>(result.Result);
         }
 
         [Fact]
@@ -213,6 +200,36 @@ namespace ApplicationsService.Tests.Controllers
             Assert.IsType<ApplicationDto>(okResult.Value);
         }
 
+        [Fact]
+        public async Task GetApplication_NullUserId_ReturnsForbid()
+        {
+            // Arrange
+            var applicationId = 1;
+            var userId = 1;
+            
+            // Setup context with invalid user ID that won't parse
+            var claims = new List<Claim>
+            {
+                new(ClaimTypes.Role, "User"),
+                new(JwtClaimTypes.SessionId, "invalid")
+            };
+            var identity = new ClaimsIdentity(claims, "test");
+            var principal = new ClaimsPrincipal(identity);
+            _controller.ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { User = principal }
+            };
+
+            var application = new Application { Id = applicationId, UserId = userId, JobId = 1 };
+            _mockRepository.Setup(r => r.GetApplicationByIdAsync(applicationId)).ReturnsAsync(application);
+
+            // Act
+            var result = await _controller.GetApplication(applicationId);
+
+            // Assert
+            var forbidResult = Assert.IsType<ForbidResult>(result.Result);
+        }
+
         #endregion
 
         #region CreateApplication Tests
@@ -226,7 +243,6 @@ namespace ApplicationsService.Tests.Controllers
 
             var createDto = new CreateApplicationDto
             {
-                UserId = userId,
                 JobId = 1,
                 ApplicantName = "John Doe",
                 ApplicantEmail = "john@example.com",
@@ -258,7 +274,7 @@ namespace ApplicationsService.Tests.Controllers
             var userId = 1;
             SetupControllerContext("User", userId.ToString());
 
-            var createDto = new CreateApplicationDto { UserId = userId, JobId = 1 };
+            var createDto = new CreateApplicationDto { JobId = 1 };
             _mockRepository.Setup(r => r.HasUserAppliedToJobAsync(userId, 1)).ReturnsAsync(true);
 
             // Act
@@ -270,15 +286,19 @@ namespace ApplicationsService.Tests.Controllers
         }
 
         [Fact]
-        public async Task CreateApplication_UnauthorizedUser_ReturnsForbid()
+        public async Task CreateApplication_InvalidUserId_ReturnsForbid()
         {
             // Arrange
-            var userId = 1;
-            var otherUserId = 2;
-            SetupControllerContext("User", otherUserId.ToString());
+            // Setup context with no user ID claim
+            var claims = new List<Claim> { new(ClaimTypes.Role, "User") };
+            var identity = new ClaimsIdentity(claims, "test");
+            var principal = new ClaimsPrincipal(identity);
+            _controller.ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { User = principal }
+            };
 
-            var createDto = new CreateApplicationDto { UserId = userId, JobId = 1 };
-            _mockRepository.Setup(r => r.HasUserAppliedToJobAsync(userId, 1)).ReturnsAsync(false);
+            var createDto = new CreateApplicationDto { JobId = 1 };
 
             // Act
             var result = await _controller.CreateApplication(createDto);
@@ -350,6 +370,26 @@ namespace ApplicationsService.Tests.Controllers
             Assert.Equal($"Application with ID {applicationId} not found", notFoundResult.Value);
         }
 
+        [Fact]
+        public async Task UpdateApplicationStatus_NotOwnerNotAdmin_ReturnsForbid()
+        {
+            // Arrange
+            var applicationId = 1;
+            var userId = 1;
+            var otherUserId = 2;
+            SetupControllerContext("User", otherUserId.ToString());
+
+            var updateDto = new UpdateApplicationStatusDto { Status = ApplicationStatus.Accepted };
+            var application = new Application { Id = applicationId, UserId = userId, JobId = 1 };
+            _mockRepository.Setup(r => r.GetApplicationByIdAsync(applicationId)).ReturnsAsync(application);
+
+            // Act
+            var result = await _controller.UpdateApplicationStatus(applicationId, updateDto);
+
+            // Assert
+            var forbidResult = Assert.IsType<ForbidResult>(result);
+        }
+
         #endregion
 
         #region GetApplicationsByJob Tests
@@ -374,6 +414,37 @@ namespace ApplicationsService.Tests.Controllers
             };
 
             _mockJobServiceClient.Setup(j => j.IsJobOwnedByUserAsync(jobId)).ReturnsAsync(true);
+            _mockRepository.Setup(r => r.GetApplicationsByJobIdAsync(jobId)).ReturnsAsync(applications);
+            _mockMapper.Setup(m => m.Map<IEnumerable<ApplicationDto>>(applications)).Returns(applicationDtos);
+
+            // Act
+            var result = await _controller.GetApplicationsByJob(jobId);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var returnedApplications = Assert.IsAssignableFrom<IEnumerable<ApplicationDto>>(okResult.Value);
+            Assert.Equal(2, returnedApplications.Count());
+        }
+
+        [Fact]
+        public async Task GetApplicationsByJob_AdminUser_ReturnsApplications()
+        {
+            // Arrange
+            var jobId = 1;
+            SetupControllerContext("Admin", "1");
+
+            var applications = new List<Application>
+            {
+                new() { Id = 1, JobId = jobId, UserId = 2 },
+                new() { Id = 2, JobId = jobId, UserId = 3 }
+            };
+
+            var applicationDtos = new List<ApplicationDto>
+            {
+                new() { Id = 1, JobId = jobId, UserId = 2 },
+                new() { Id = 2, JobId = jobId, UserId = 3 }
+            };
+
             _mockRepository.Setup(r => r.GetApplicationsByJobIdAsync(jobId)).ReturnsAsync(applications);
             _mockMapper.Setup(m => m.Map<IEnumerable<ApplicationDto>>(applications)).Returns(applicationDtos);
 
@@ -421,10 +492,43 @@ namespace ApplicationsService.Tests.Controllers
         #region GetApplicationsByUser Tests
 
         [Fact]
-        public async Task GetApplicationsByUser_ValidUserId_ReturnsApplications()
+        public async Task GetApplicationsByUser_OwnApplications_ReturnsApplications()
         {
             // Arrange
             var userId = 1;
+            SetupControllerContext("User", userId.ToString());
+
+            var applications = new List<Application>
+            {
+                new() { Id = 1, UserId = userId, JobId = 1 },
+                new() { Id = 2, UserId = userId, JobId = 2 }
+            };
+
+            var applicationDtos = new List<ApplicationDto>
+            {
+                new() { Id = 1, UserId = userId, JobId = 1 },
+                new() { Id = 2, UserId = userId, JobId = 2 }
+            };
+
+            _mockRepository.Setup(r => r.GetApplicationsByUserIdAsync(userId)).ReturnsAsync(applications);
+            _mockMapper.Setup(m => m.Map<IEnumerable<ApplicationDto>>(applications)).Returns(applicationDtos);
+
+            // Act
+            var result = await _controller.GetApplicationsByUser(userId);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var returnedApplications = Assert.IsAssignableFrom<IEnumerable<ApplicationDto>>(okResult.Value);
+            Assert.Equal(2, returnedApplications.Count());
+        }
+
+        [Fact]
+        public async Task GetApplicationsByUser_AdminUser_ReturnsApplications()
+        {
+            // Arrange
+            var userId = 1;
+            SetupControllerContext("Admin", "999"); // Different user ID but admin role
+
             var applications = new List<Application>
             {
                 new() { Id = 1, UserId = userId, JobId = 1 },
@@ -463,21 +567,41 @@ namespace ApplicationsService.Tests.Controllers
             Assert.Equal("Invalid user ID", badRequestResult.Value);
         }
 
+        [Fact]
+        public async Task GetApplicationsByUser_NotOwnerNotAdmin_ReturnsForbid()
+        {
+            // Arrange
+            var userId = 1;
+            var otherUserId = 2;
+            SetupControllerContext("User", otherUserId.ToString());
+
+            // Act
+            var result = await _controller.GetApplicationsByUser(userId);
+
+            // Assert
+            var forbidResult = Assert.IsType<ForbidResult>(result.Result);
+        }
+
         #endregion
 
         #region UpdateApplication Tests
 
         [Fact]
-        public async Task UpdateApplication_ValidRequest_ReturnsUpdatedApplication()
+        public async Task UpdateApplication_ValidRequestOwner_ReturnsUpdatedApplication()
         {
             // Arrange
             var applicationId = 1;
-            var applicationDto = new ApplicationDto { Id = applicationId, UserId = 1, JobId = 1 };
-            var application = new Application { Id = applicationId, UserId = 1, JobId = 1 };
+            var userId = 1;
+            SetupControllerContext("User", userId.ToString());
 
-            _mockMapper.Setup(m => m.Map<Application>(applicationDto)).Returns(application);
-            _mockRepository.Setup(r => r.UpdateApplicationAsync(application)).ReturnsAsync(application);
-            _mockMapper.Setup(m => m.Map<ApplicationDto>(application)).Returns(applicationDto);
+            var applicationDto = new ApplicationDto { Id = applicationId, UserId = userId, JobId = 1 };
+            var existingApplication = new Application { Id = applicationId, UserId = userId, JobId = 1 };
+            var updatedApplication = new Application { Id = applicationId, UserId = userId, JobId = 1 };
+
+            _mockRepository.Setup(r => r.GetApplicationByIdAsync(applicationId)).ReturnsAsync(existingApplication);
+            _mockMapper.Setup(m => m.Map<Application>(applicationDto)).Returns(updatedApplication);
+            _mockRepository.Setup(r => r.UpdateApplicationAsync(updatedApplication)).ReturnsAsync(updatedApplication);
+            _mockMapper.Setup(m => m.Map<ApplicationDto>(updatedApplication)).Returns(applicationDto);
 
             // Act
             var result = await _controller.UpdateApplication(applicationId, applicationDto);
@@ -518,15 +642,58 @@ namespace ApplicationsService.Tests.Controllers
             Assert.Equal("Application ID mismatch", badRequestResult.Value);
         }
 
+        [Fact]
+        public async Task UpdateApplication_NotFound_ReturnsNotFound()
+        {
+            // Arrange
+            var applicationId = 1;
+            var applicationDto = new ApplicationDto { Id = applicationId };
+            SetupControllerContext("User", "1");
+
+            _mockRepository.Setup(r => r.GetApplicationByIdAsync(applicationId)).ReturnsAsync((Application?)null);
+
+            // Act
+            var result = await _controller.UpdateApplication(applicationId, applicationDto);
+
+            // Assert
+            var notFoundResult = Assert.IsType<NotFoundObjectResult>(result.Result);
+        }
+
+        [Fact]
+        public async Task UpdateApplication_NotOwnerNotAdmin_ReturnsForbid()
+        {
+            // Arrange
+            var applicationId = 1;
+            var userId = 1;
+            var otherUserId = 2;
+            SetupControllerContext("User", otherUserId.ToString());
+
+            var applicationDto = new ApplicationDto { Id = applicationId, UserId = userId, JobId = 1 };
+            var existingApplication = new Application { Id = applicationId, UserId = userId, JobId = 1 };
+
+            _mockRepository.Setup(r => r.GetApplicationByIdAsync(applicationId)).ReturnsAsync(existingApplication);
+
+            // Act
+            var result = await _controller.UpdateApplication(applicationId, applicationDto);
+
+            // Assert
+            var forbidResult = Assert.IsType<ForbidResult>(result.Result);
+        }
+
         #endregion
 
         #region DeleteApplication Tests
 
         [Fact]
-        public async Task DeleteApplication_ValidId_ReturnsNoContent()
+        public async Task DeleteApplication_ValidIdOwner_ReturnsNoContent()
         {
             // Arrange
             var applicationId = 1;
+            var userId = 1;
+            SetupControllerContext("User", userId.ToString());
+
+            var application = new Application { Id = applicationId, UserId = userId, JobId = 1 };
+            _mockRepository.Setup(r => r.GetApplicationByIdAsync(applicationId)).ReturnsAsync(application);
             _mockRepository.Setup(r => r.DeleteApplicationAsync(applicationId)).ReturnsAsync(true);
 
             // Act
@@ -555,14 +722,33 @@ namespace ApplicationsService.Tests.Controllers
         {
             // Arrange
             var applicationId = 999;
-            _mockRepository.Setup(r => r.DeleteApplicationAsync(applicationId)).ReturnsAsync(false);
+            SetupControllerContext("User", "1");
+            _mockRepository.Setup(r => r.GetApplicationByIdAsync(applicationId)).ReturnsAsync((Application?)null);
 
             // Act
             var result = await _controller.DeleteApplication(applicationId);
 
             // Assert
             var notFoundResult = Assert.IsType<NotFoundObjectResult>(result);
-            Assert.Equal($"Application with ID {applicationId} not found", notFoundResult.Value);
+        }
+
+        [Fact]
+        public async Task DeleteApplication_NotOwnerNotAdmin_ReturnsForbid()
+        {
+            // Arrange
+            var applicationId = 1;
+            var userId = 1;
+            var otherUserId = 2;
+            SetupControllerContext("User", otherUserId.ToString());
+
+            var application = new Application { Id = applicationId, UserId = userId, JobId = 1 };
+            _mockRepository.Setup(r => r.GetApplicationByIdAsync(applicationId)).ReturnsAsync(application);
+
+            // Act
+            var result = await _controller.DeleteApplication(applicationId);
+
+            // Assert
+            var forbidResult = Assert.IsType<ForbidResult>(result);
         }
 
         #endregion
@@ -570,11 +756,32 @@ namespace ApplicationsService.Tests.Controllers
         #region GetApplicationCountByJob Tests
 
         [Fact]
-        public async Task GetApplicationCountByJob_ValidJobId_ReturnsCount()
+        public async Task GetApplicationCountByJob_JobOwner_ReturnsCount()
         {
             // Arrange
             var jobId = 1;
             var expectedCount = 5;
+            SetupControllerContext("User", "1");
+
+            _mockJobServiceClient.Setup(j => j.IsJobOwnedByUserAsync(jobId)).ReturnsAsync(true);
+            _mockRepository.Setup(r => r.GetApplicationCountByJobIdAsync(jobId)).ReturnsAsync(expectedCount);
+
+            // Act
+            var result = await _controller.GetApplicationCountByJob(jobId);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            Assert.Equal(expectedCount, okResult.Value);
+        }
+
+        [Fact]
+        public async Task GetApplicationCountByJob_AdminUser_ReturnsCount()
+        {
+            // Arrange
+            var jobId = 1;
+            var expectedCount = 5;
+            SetupControllerContext("Admin", "1");
+
             _mockRepository.Setup(r => r.GetApplicationCountByJobIdAsync(jobId)).ReturnsAsync(expectedCount);
 
             // Act
@@ -599,16 +806,34 @@ namespace ApplicationsService.Tests.Controllers
             Assert.Equal("Invalid job ID", badRequestResult.Value);
         }
 
+        [Fact]
+        public async Task GetApplicationCountByJob_NotJobOwnerNotAdmin_ReturnsForbid()
+        {
+            // Arrange
+            var jobId = 1;
+            SetupControllerContext("User", "1");
+
+            _mockJobServiceClient.Setup(j => j.IsJobOwnedByUserAsync(jobId)).ReturnsAsync(false);
+
+            // Act
+            var result = await _controller.GetApplicationCountByJob(jobId);
+
+            // Assert
+            var forbidResult = Assert.IsType<ForbidResult>(result.Result);
+        }
+
         #endregion
 
         #region GetApplicationCountByStatus Tests
 
         [Fact]
-        public async Task GetApplicationCountByStatus_ValidStatus_ReturnsCount()
+        public async Task GetApplicationCountByStatus_AdminUser_ReturnsCount()
         {
             // Arrange
             var status = ApplicationStatus.Pending;
             var expectedCount = 3;
+            SetupControllerContext("Admin", "1");
+
             _mockRepository.Setup(r => r.GetApplicationCountByStatusAsync(status)).ReturnsAsync(expectedCount);
 
             // Act
@@ -621,15 +846,75 @@ namespace ApplicationsService.Tests.Controllers
 
         #endregion
 
-        #region HasUserAppliedToJob Tests
+        #region HasCurrentUserAppliedToJob Tests
 
         [Fact]
-        public async Task HasUserAppliedToJob_ValidIds_ReturnsBoolean()
+        public async Task HasCurrentUserAppliedToJob_ValidJobId_ReturnsBoolean()
+        {
+            // Arrange
+            var jobId = 1;
+            var userId = 1;
+            var hasApplied = true;
+            SetupControllerContext("User", userId.ToString());
+
+            _mockRepository.Setup(r => r.HasUserAppliedToJobAsync(userId, jobId)).ReturnsAsync(hasApplied);
+
+            // Act
+            var result = await _controller.HasCurrentUserAppliedToJob(jobId);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            Assert.Equal(hasApplied, okResult.Value);
+        }
+
+        [Fact]
+        public async Task HasCurrentUserAppliedToJob_InvalidJobId_ReturnsBadRequest()
+        {
+            // Arrange
+            var invalidJobId = 0;
+
+            // Act
+            var result = await _controller.HasCurrentUserAppliedToJob(invalidJobId);
+
+            // Assert
+            var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
+            Assert.Equal("Invalid job ID", badRequestResult.Value);
+        }
+
+        [Fact]
+        public async Task HasCurrentUserAppliedToJob_NoUserIdInToken_ReturnsForbid()
+        {
+            // Arrange
+            var jobId = 1;
+            // Setup context with no user ID claim
+            var claims = new List<Claim> { new(ClaimTypes.Role, "User") };
+            var identity = new ClaimsIdentity(claims, "test");
+            var principal = new ClaimsPrincipal(identity);
+            _controller.ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext { User = principal }
+            };
+
+            // Act
+            var result = await _controller.HasCurrentUserAppliedToJob(jobId);
+
+            // Assert
+            var forbidResult = Assert.IsType<ForbidResult>(result.Result);
+        }
+
+        #endregion
+
+        #region HasUserAppliedToJob Tests (Admin Only)
+
+        [Fact]
+        public async Task HasUserAppliedToJob_AdminUser_ReturnsBoolean()
         {
             // Arrange
             var userId = 1;
             var jobId = 1;
             var hasApplied = true;
+            SetupControllerContext("Admin", "999");
+
             _mockRepository.Setup(r => r.HasUserAppliedToJobAsync(userId, jobId)).ReturnsAsync(hasApplied);
 
             // Act
@@ -646,6 +931,7 @@ namespace ApplicationsService.Tests.Controllers
             // Arrange
             var invalidUserId = 0;
             var invalidJobId = 0;
+            SetupControllerContext("Admin", "1");
 
             // Act
             var result = await _controller.HasUserAppliedToJob(invalidUserId, invalidJobId);
@@ -653,6 +939,202 @@ namespace ApplicationsService.Tests.Controllers
             // Assert
             var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
             Assert.Equal("Invalid user ID or job ID", badRequestResult.Value);
+        }
+
+        #endregion
+
+        #region Exception Handling Tests
+
+        [Fact]
+        public async Task GetApplication_ExceptionThrown_ReturnsInternalServerError()
+        {
+            // Arrange
+            var applicationId = 1;
+            SetupControllerContext("User", "1");
+            _mockRepository.Setup(r => r.GetApplicationByIdAsync(applicationId)).ThrowsAsync(new Exception("Database error"));
+
+            // Act
+            var result = await _controller.GetApplication(applicationId);
+
+            // Assert
+            var statusResult = Assert.IsType<ObjectResult>(result.Result);
+            Assert.Equal(500, statusResult.StatusCode);
+        }
+
+        [Fact]
+        public async Task CreateApplication_ExceptionThrown_ReturnsInternalServerError()
+        {
+            // Arrange
+            var userId = 1;
+            SetupControllerContext("User", userId.ToString());
+            var createDto = new CreateApplicationDto { JobId = 1 };
+            
+            _mockRepository.Setup(r => r.HasUserAppliedToJobAsync(userId, 1)).ThrowsAsync(new Exception("Database error"));
+
+            // Act
+            var result = await _controller.CreateApplication(createDto);
+
+            // Assert
+            var statusResult = Assert.IsType<ObjectResult>(result.Result);
+            Assert.Equal(500, statusResult.StatusCode);
+        }
+
+        [Fact]
+        public async Task UpdateApplicationStatus_ExceptionThrown_ReturnsInternalServerError()
+        {
+            // Arrange
+            var applicationId = 1;
+            SetupControllerContext("User", "1");
+            var updateDto = new UpdateApplicationStatusDto { Status = ApplicationStatus.Accepted };
+            
+            _mockRepository.Setup(r => r.GetApplicationByIdAsync(applicationId)).ThrowsAsync(new Exception("Database error"));
+
+            // Act
+            var result = await _controller.UpdateApplicationStatus(applicationId, updateDto);
+
+            // Assert
+            var statusResult = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(500, statusResult.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetApplicationsByJob_ExceptionThrown_ReturnsInternalServerError()
+        {
+            // Arrange
+            var jobId = 1;
+            SetupControllerContext("Admin", "1");
+            
+            _mockRepository.Setup(r => r.GetApplicationsByJobIdAsync(jobId)).ThrowsAsync(new Exception("Database error"));
+
+            // Act
+            var result = await _controller.GetApplicationsByJob(jobId);
+
+            // Assert
+            var statusResult = Assert.IsType<ObjectResult>(result.Result);
+            Assert.Equal(500, statusResult.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetApplicationsByUser_ExceptionThrown_ReturnsInternalServerError()
+        {
+            // Arrange
+            var userId = 1;
+            SetupControllerContext("User", userId.ToString());
+            
+            _mockRepository.Setup(r => r.GetApplicationsByUserIdAsync(userId)).ThrowsAsync(new Exception("Database error"));
+
+            // Act
+            var result = await _controller.GetApplicationsByUser(userId);
+
+            // Assert
+            var statusResult = Assert.IsType<ObjectResult>(result.Result);
+            Assert.Equal(500, statusResult.StatusCode);
+        }
+
+        [Fact]
+        public async Task UpdateApplication_ExceptionThrown_ReturnsInternalServerError()
+        {
+            // Arrange
+            var applicationId = 1;
+            var userId = 1;
+            SetupControllerContext("User", userId.ToString());
+            var applicationDto = new ApplicationDto { Id = applicationId, UserId = userId, JobId = 1 };
+            
+            _mockRepository.Setup(r => r.GetApplicationByIdAsync(applicationId)).ThrowsAsync(new Exception("Database error"));
+
+            // Act
+            var result = await _controller.UpdateApplication(applicationId, applicationDto);
+
+            // Assert
+            var statusResult = Assert.IsType<ObjectResult>(result.Result);
+            Assert.Equal(500, statusResult.StatusCode);
+        }
+
+        [Fact]
+        public async Task DeleteApplication_ExceptionThrown_ReturnsInternalServerError()
+        {
+            // Arrange
+            var applicationId = 1;
+            SetupControllerContext("User", "1");
+            
+            _mockRepository.Setup(r => r.GetApplicationByIdAsync(applicationId)).ThrowsAsync(new Exception("Database error"));
+
+            // Act
+            var result = await _controller.DeleteApplication(applicationId);
+
+            // Assert
+            var statusResult = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(500, statusResult.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetApplicationCountByJob_ExceptionThrown_ReturnsInternalServerError()
+        {
+            // Arrange
+            var jobId = 1;
+            SetupControllerContext("Admin", "1");
+            
+            _mockRepository.Setup(r => r.GetApplicationCountByJobIdAsync(jobId)).ThrowsAsync(new Exception("Database error"));
+
+            // Act
+            var result = await _controller.GetApplicationCountByJob(jobId);
+
+            // Assert
+            var statusResult = Assert.IsType<ObjectResult>(result.Result);
+            Assert.Equal(500, statusResult.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetApplicationCountByStatus_ExceptionThrown_ReturnsInternalServerError()
+        {
+            // Arrange
+            var status = ApplicationStatus.Pending;
+            SetupControllerContext("Admin", "1");
+            
+            _mockRepository.Setup(r => r.GetApplicationCountByStatusAsync(status)).ThrowsAsync(new Exception("Database error"));
+
+            // Act
+            var result = await _controller.GetApplicationCountByStatus(status);
+
+            // Assert
+            var statusResult = Assert.IsType<ObjectResult>(result.Result);
+            Assert.Equal(500, statusResult.StatusCode);
+        }
+
+        [Fact]
+        public async Task HasCurrentUserAppliedToJob_ExceptionThrown_ReturnsInternalServerError()
+        {
+            // Arrange
+            var jobId = 1;
+            var userId = 1;
+            SetupControllerContext("User", userId.ToString());
+            
+            _mockRepository.Setup(r => r.HasUserAppliedToJobAsync(userId, jobId)).ThrowsAsync(new Exception("Database error"));
+
+            // Act
+            var result = await _controller.HasCurrentUserAppliedToJob(jobId);
+
+            // Assert
+            var statusResult = Assert.IsType<ObjectResult>(result.Result);
+            Assert.Equal(500, statusResult.StatusCode);
+        }
+
+        [Fact]
+        public async Task HasUserAppliedToJob_ExceptionThrown_ReturnsInternalServerError()
+        {
+            // Arrange
+            var userId = 1;
+            var jobId = 1;
+            SetupControllerContext("Admin", "1");
+            
+            _mockRepository.Setup(r => r.HasUserAppliedToJobAsync(userId, jobId)).ThrowsAsync(new Exception("Database error"));
+
+            // Act
+            var result = await _controller.HasUserAppliedToJob(userId, jobId);
+
+            // Assert
+            var statusResult = Assert.IsType<ObjectResult>(result.Result);
+            Assert.Equal(500, statusResult.StatusCode);
         }
 
         #endregion
