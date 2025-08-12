@@ -1,6 +1,7 @@
 using TalentHire.Services.ApplicationsService.Models;
 using TalentHire.Services.ApplicationsService.Data;
 using Microsoft.EntityFrameworkCore;
+using TalentHire.Services.ApplicationsService.Services;
 using TalentHire.Services.ApplicationsService.DTOs;
 
 namespace TalentHire.Services.ApplicationsService.Repositories;
@@ -8,10 +9,12 @@ namespace TalentHire.Services.ApplicationsService.Repositories;
 public class ApplicationRepository : IApplicationRepository
 {
     private readonly ApplicationDbContext _context;
+    private readonly KafkaApplicationService _kafkaService;
 
-    public ApplicationRepository(ApplicationDbContext context)
+    public ApplicationRepository(ApplicationDbContext context, KafkaApplicationService kafkaService)
     {
         _context = context;
+        _kafkaService = kafkaService;
     }
 
     public async Task<IEnumerable<Application>> GetAllApplicationsAsync()
@@ -54,6 +57,7 @@ public class ApplicationRepository : IApplicationRepository
         _context.Applications.Add(application);
         await _context.SaveChangesAsync();
 
+        await _kafkaService.CreateApplicationAsync(application.UserId, application.JobId);
         return application;
     }
 
