@@ -2,7 +2,6 @@ using TalentHire.Services.IdentityService.DTOs;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
-using TalentHire.Models;
 using TalentHire.Services.IdentityService.Interfaces;
 using System.Text;
 using System.Security.Cryptography;
@@ -44,6 +43,7 @@ namespace TalentHire.Services.IdentityService.Services
             // Define claims
             var claims = new[]
             {
+                new Claim(JwtRegisteredClaimNames.Sid, currUser.Id.ToString()),
                 new Claim(JwtRegisteredClaimNames.Sub, user.Username),
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                 new Claim(ClaimTypes.Role, currUser.Role.ToString()) // Add role claim

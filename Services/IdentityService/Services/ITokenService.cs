@@ -1,5 +1,4 @@
 using TalentHire.Services.IdentityService.DTOs;
-using TalentHire.Models;
 namespace TalentHire.Services.IdentityService.Services
 {
 

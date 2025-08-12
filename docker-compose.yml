@@ -1,5 +1,52 @@
 
 services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - app-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.4  # stays in ZooKeeper mode
+    depends_on:
+      - zookeeper
+    ports:
+      - "29092:29092"   # host access
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - app-network
+  api-gateway:
+    build:
+      context: ./GatewayAPI
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=development
+      - ASPNETCORE_ENVIRONMENT=Development
+    volumes:
+      - ./GatewayAPI:/app
+      - /app/bin
+      - /app/obj
+    depends_on:
+      - job-service
+      - identity-service
+      - applications-service
+    networks:
+      - app-network
+    working_dir: /app
+    command: >
+      sh -c "dotnet watch run --urls=http://0.0.0.0:8080"
+    expose:
+      - "8080"
+
   job-service:
     build:
       context: ./Services/JobService
@@ -29,34 +76,61 @@ services:
       timeout: 10s
       retries: 3
 
-#   identity-service:
-#     build:
-#       context: ./Services/IdentityService
-#       dockerfile: Dockerfile
-#     ports:
-#       - "8082:8082"
-#     environment:
-#       - NODE_ENV=development
-#       - ASPNETCORE_ENVIRONMENT=Development
-#     volumes:
-#       - ./Services/IdentityService:/app
-#       - /app/bin
-#       - /app/obj
-#     depends_on:
-#       - identity_db
-#     networks:
-#       - app-network
-#     working_dir: /app
-#     command: >
-#       sh -c "dotnet ef database update &&
-#              dotnet watch run --urls=http://0.0.0.0:8082"
-#     expose:
-#       - "8082"
-#     healthcheck:
-#       test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
-#       interval: 30s
-#       timeout: 10s
-#       retries: 3
+  identity-service:
+    build:
+      context: ./Services/IdentityService
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      - NODE_ENV=development
+      - ASPNETCORE_ENVIRONMENT=Development
+    volumes:
+      - ./Services/IdentityService:/app
+      - /app/bin
+      - /app/obj
+    depends_on:
+      - identity_db
+    networks:
+      - app-network
+    working_dir: /app
+    command: >
+      sh -c "dotnet ef database update &&
+             dotnet watch run --urls=http://0.0.0.0:8082"
+    expose:
+      - "8082"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  applications-service:
+    build:
+      context: .
+      dockerfile: ./Services/ApplicationsService/Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      - NODE_ENV=development
+      - ASPNETCORE_ENVIRONMENT=Development
+    depends_on:
+      - applications_db
+      - zookeeper
+      - kafka
+    networks:
+      - app-network
+    working_dir: /app
+    command: >
+      sh -c "dotnet ef database update &&
+             dotnet watch run --urls=http://0.0.0.0:8083"
+    expose:
+      - "8083"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   job_db:
     image: postgres:latest
@@ -67,7 +141,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - job_db_data:/var/lib/postgresql/data
     networks:
       - app-network
     healthcheck:
@@ -76,26 +150,46 @@ services:
       timeout: 10s
       retries: 3
 
-#   identity_db:
-#     image: postgres:latest
-#     environment:
-#       POSTGRES_USER: postgres
-#       POSTGRES_PASSWORD: password
-#       POSTGRES_DB: identity_db
-#     ports:
-#       - "6303:6303"
-#     volumes:
-#       - db_data:/var/lib/postgresql/data
-#     networks:
-#       - app-network
-#     healthcheck:
-#       test: ["CMD-SHELL", "pg_isready -U postgres"]
-#       interval: 30s
-#       timeout: 10s
-#       retries: 3
+  identity_db:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: identity_db
+    ports:
+      - "6303:5432"
+    volumes:
+      - identity_db_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  applications_db:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: applications_db
+    ports:
+      - "6304:5432"
+    volumes:
+      - applications_db_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
-  db_data:
+  job_db_data:
+  identity_db_data:
+  applications_db_data:
 
 networks:
   app-network:

@@ -4,11 +4,13 @@ using TalentHire.Services;
 using TalentHire.Services.JobService.Interfaces;
 using TalentHire.Services.JobService.DTOs;
 using TalentHire.Services.JobService.Models;
+using Microsoft.AspNetCore.Authorization;
 
 namespace TalentHire.Services.JobService.Controllers
 {
     [Route("api/jobs")]
     [ApiController]
+    [Authorize]
     public class JobsController : ControllerBase
     {
         private readonly IJobRepository _jobRepository;
@@ -48,7 +50,7 @@ namespace TalentHire.Services.JobService.Controllers
         [HttpPut("{id}")]
         public async Task<ActionResult<JobDto>> UpdateJob(int id, JobDto job)
         {
-            
+
             var updatedJob = await _jobRepository.UpdateJobAsync(job);
             if (updatedJob == null)
             {
