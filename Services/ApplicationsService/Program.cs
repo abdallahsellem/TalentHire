@@ -8,6 +8,7 @@ using TalentHire.Services.ApplicationsService.Data;
 using TalentHire.Services.ApplicationsService.Repositories;
 using TalentHire.Services.ApplicationsService.Mapper;
 using TalentHire.Services.ApplicationsService.Services;
+using TalentHire.Shared.Kafka;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +26,8 @@ builder.Services.AddAutoMapper(typeof(ApplicationMapperProfile));
 
 // Add Repository
 builder.Services.AddScoped<IApplicationRepository, ApplicationRepository>();
+builder.Services.AddScoped<IKafkaProducer, KafkaProducer>();
+builder.Services.AddScoped<KafkaApplicationService>();
 
 
 // Add JWT Authentication

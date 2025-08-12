@@ -9,7 +9,7 @@ using System.IdentityModel.Tokens.Jwt;
 using IdentityModel;
 using TalentHire.Services.ApplicationsService.Services;
 
-namespace ApplicationsService.Controllers;
+namespace TalentHire.Services.ApplicationsService.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -24,12 +24,24 @@ public class ApplicationsController : ControllerBase
     public ApplicationsController(
         IApplicationRepository applicationRepository,
         IMapper mapper,
-        ILogger<ApplicationsController> logger, IJobServiceClient jobServiceClient)
+        ILogger<ApplicationsController> logger, 
+        IJobServiceClient jobServiceClient)
     {
         _applicationRepository = applicationRepository;
         _mapper = mapper;
         _logger = logger;
         _jobServiceClient = jobServiceClient;
+    }
+
+    private int? GetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirstValue(JwtClaimTypes.SessionId);
+        return int.TryParse(userIdClaim, out var userId) ? userId : null;
+    }
+
+    private bool IsAdmin()
+    {
+        return User.FindFirstValue(ClaimTypes.Role) == "Admin";
     }
 
     /// <summary>
@@ -41,13 +53,6 @@ public class ApplicationsController : ControllerBase
     {
         try
         {
-          
-            var userRole=User.FindFirstValue(ClaimTypes.Role);
-            if (string.IsNullOrEmpty(userRole) || userRole != "Admin")
-            {
-                return Forbid("Only admins can access this endpoint");
-            }
-            
             var applications = await _applicationRepository.GetAllApplicationsAsync();
             var applicationDtos = _mapper.Map<IEnumerable<ApplicationDto>>(applications);
             return Ok(applicationDtos);
@@ -77,19 +82,13 @@ public class ApplicationsController : ControllerBase
             {
                 return NotFound($"Application with ID {id} not found");
             }
-            // Check if user is Admin or the owner of the application
-            var userRole = User.FindFirstValue(ClaimTypes.Role);
-            var userIdClaim = User.FindFirstValue(JwtClaimTypes.SessionId);
 
-            Console.WriteLine($"User Role: {userRole}, User ID Claim: {userIdClaim}");
-
-            if (userRole != "Admin")
+            var currentUserId = GetCurrentUserId();
+            if (!IsAdmin() && (currentUserId == null || application.UserId != currentUserId))
             {
-                if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId) || application.UserId != userId)
-                {
-                    return Forbid("You are not authorized to access this application");
-                }
+                return Forbid("You are not authorized to access this application");
             }
+
             var applicationDto = _mapper.Map<ApplicationDto>(application);
             return Ok(applicationDto);
         }
@@ -108,24 +107,27 @@ public class ApplicationsController : ControllerBase
     {
         try
         {
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null)
+            {
+                return Forbid("User ID not found in token");
+            }
+
             // Check if user has already applied to this job
-            var hasApplied = await _applicationRepository.HasUserAppliedToJobAsync(createDto.UserId, createDto.JobId);
+            var hasApplied = await _applicationRepository.HasUserAppliedToJobAsync(currentUserId.Value, createDto.JobId);
             if (hasApplied)
             {
                 return Conflict("User has already applied to this job");
             }
-            var userIdClaim = User.FindFirstValue(JwtClaimTypes.SessionId);
-            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId) || userId != createDto.UserId)
-            {
-                return Forbid("You are not authorized to create this application");
-            }
 
             var application = _mapper.Map<Application>(createDto);
+            application.UserId = currentUserId.Value;
+            
             var createdApplication = await _applicationRepository.CreateApplicationAsync(application);
             var applicationDto = _mapper.Map<ApplicationDto>(createdApplication);
 
             _logger.LogInformation("Created application {Id} for job {JobId} by user {UserId}",
-                createdApplication.Id, createDto.JobId, createDto.UserId);
+                createdApplication.Id, createDto.JobId, currentUserId.Value);
 
             return CreatedAtAction(nameof(GetApplication), new { id = applicationDto.Id }, applicationDto);
         }
@@ -146,7 +148,6 @@ public class ApplicationsController : ControllerBase
         {
             return BadRequest("Invalid application ID");
         }
-            var userIdClaim = User.FindFirstValue(JwtClaimTypes.SessionId);
 
         try
         {
@@ -155,10 +156,13 @@ public class ApplicationsController : ControllerBase
             {
                 return NotFound($"Application with ID {id} not found");
             }
-            if(application.UserId != int.Parse(userIdClaim) && User.FindFirstValue(ClaimTypes.Role) != "Admin")
+
+            var currentUserId = GetCurrentUserId();
+            if (!IsAdmin() && (currentUserId == null || application.UserId != currentUserId))
             {
                 return Forbid("You are not authorized to update this application status");
             }
+
             var success = await _applicationRepository.UpdateApplicationStatusAsync(id, updateDto.Status, updateDto.ReviewerNotes);
             if (!success)
             {
@@ -188,11 +192,15 @@ public class ApplicationsController : ControllerBase
 
         try
         {
-            var isJobOwner = await _jobServiceClient.IsJobOwnedByUserAsync(jobId);
-            if (!isJobOwner && User.FindFirstValue(ClaimTypes.Role) != "Admin")
+            if (!IsAdmin())
             {
-                return Forbid("You are not authorized to view applications for this job");
+                var isJobOwner = await _jobServiceClient.IsJobOwnedByUserAsync(jobId);
+                if (!isJobOwner)
+                {
+                    return Forbid("You are not authorized to view applications for this job");
+                }
             }
+
             var applications = await _applicationRepository.GetApplicationsByJobIdAsync(jobId);
             var applicationDtos = _mapper.Map<IEnumerable<ApplicationDto>>(applications);
             return Ok(applicationDtos);
@@ -217,6 +225,14 @@ public class ApplicationsController : ControllerBase
 
         try
         {
+            var currentUserId = GetCurrentUserId();
+            
+            // Users can only view their own applications unless they are admin
+            if (!IsAdmin() && (currentUserId == null || currentUserId != userId))
+            {
+                return Forbid("You can only view your own applications");
+            }
+
             var applications = await _applicationRepository.GetApplicationsByUserIdAsync(userId);
             var applicationDtos = _mapper.Map<IEnumerable<ApplicationDto>>(applications);
             return Ok(applicationDtos);
@@ -227,7 +243,6 @@ public class ApplicationsController : ControllerBase
             return StatusCode(500, "Internal server error");
         }
     }
-
 
     /// <summary>
     /// Update an existing application
@@ -247,13 +262,20 @@ public class ApplicationsController : ControllerBase
 
         try
         {
-            var application = _mapper.Map<Application>(applicationDto);
-            var updatedApplication = await _applicationRepository.UpdateApplicationAsync(application);
-
-            if (updatedApplication == null)
+            var existingApplication = await _applicationRepository.GetApplicationByIdAsync(id);
+            if (existingApplication == null)
             {
                 return NotFound($"Application with ID {id} not found");
             }
+
+            var currentUserId = GetCurrentUserId();
+            if (!IsAdmin() && (currentUserId == null || existingApplication.UserId != currentUserId))
+            {
+                return Forbid("You are not authorized to update this application");
+            }
+
+            var application = _mapper.Map<Application>(applicationDto);
+            var updatedApplication = await _applicationRepository.UpdateApplicationAsync(application);
 
             var updatedDto = _mapper.Map<ApplicationDto>(updatedApplication);
             _logger.LogInformation("Updated application {Id}", id);
@@ -279,6 +301,18 @@ public class ApplicationsController : ControllerBase
 
         try
         {
+            var application = await _applicationRepository.GetApplicationByIdAsync(id);
+            if (application == null)
+            {
+                return NotFound($"Application with ID {id} not found");
+            }
+
+            var currentUserId = GetCurrentUserId();
+            if (!IsAdmin() && (currentUserId == null || application.UserId != currentUserId))
+            {
+                return Forbid("You are not authorized to delete this application");
+            }
+
             var success = await _applicationRepository.DeleteApplicationAsync(id);
             if (!success)
             {
@@ -308,6 +342,15 @@ public class ApplicationsController : ControllerBase
 
         try
         {
+            if (!IsAdmin())
+            {
+                var isJobOwner = await _jobServiceClient.IsJobOwnedByUserAsync(jobId);
+                if (!isJobOwner)
+                {
+                    return Forbid("You are not authorized to view application count for this job");
+                }
+            }
+
             var count = await _applicationRepository.GetApplicationCountByJobIdAsync(jobId);
             return Ok(count);
         }
@@ -319,9 +362,10 @@ public class ApplicationsController : ControllerBase
     }
 
     /// <summary>
-    /// Get application count by status
+    /// Get application count by status (Admin only)
     /// </summary>
     [HttpGet("status/{status}/count")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<int>> GetApplicationCountByStatus(ApplicationStatus status)
     {
         try
@@ -337,9 +381,39 @@ public class ApplicationsController : ControllerBase
     }
 
     /// <summary>
-    /// Check if user has applied to a job
+    /// Check if current user has applied to a job
+    /// </summary>
+    [HttpGet("job/{jobId}/applied")]
+    public async Task<ActionResult<bool>> HasCurrentUserAppliedToJob(int jobId)
+    {
+        if (jobId <= 0)
+        {
+            return BadRequest("Invalid job ID");
+        }
+
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            if (currentUserId == null)
+            {
+                return Forbid("User ID not found in token");
+            }
+
+            var hasApplied = await _applicationRepository.HasUserAppliedToJobAsync(currentUserId.Value, jobId);
+            return Ok(hasApplied);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking if current user applied to job {JobId}", jobId);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    /// <summary>
+    /// Check if specific user has applied to a job (Admin only)
     /// </summary>
     [HttpGet("user/{userId}/job/{jobId}/exists")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<bool>> HasUserAppliedToJob(int userId, int jobId)
     {
         if (userId <= 0 || jobId <= 0)
