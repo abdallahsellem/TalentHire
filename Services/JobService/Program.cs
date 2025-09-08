@@ -8,6 +8,7 @@ using TalentHire.Services.JobService.Data;
 using TalentHire.Services.JobService.Interfaces;
 using TalentHire.Services.JobService.Mapper;
 using TalentHire.Services.JobService.Repositories;
+using TalentHire.Services.JobService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,7 +27,7 @@ var mapperConfig = new MapperConfiguration(cfg =>
 
 IMapper mapper = mapperConfig.CreateMapper();
 builder.Services.AddSingleton(mapper);
-
+builder.Services.AddHostedService<KafkaApplicationConsumerService>();
 
 var secretKey = builder.Configuration.GetSection("JwtSettings")["SecretKey"];
 

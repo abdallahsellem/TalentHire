@@ -20,17 +20,19 @@ public class ApplicationsController : ControllerBase
     private readonly IMapper _mapper;
     private readonly ILogger<ApplicationsController> _logger;
     private readonly IJobServiceClient _jobServiceClient;
-
+    private readonly KafkaApplicationProducerService _kafkaProducerService;
     public ApplicationsController(
         IApplicationRepository applicationRepository,
         IMapper mapper,
-        ILogger<ApplicationsController> logger, 
-        IJobServiceClient jobServiceClient)
+        ILogger<ApplicationsController> logger,
+        IJobServiceClient jobServiceClient,
+        KafkaApplicationProducerService kafkaProducerService)
     {
         _applicationRepository = applicationRepository;
         _mapper = mapper;
         _logger = logger;
         _jobServiceClient = jobServiceClient;
+        _kafkaProducerService = kafkaProducerService;
     }
 
     private int? GetCurrentUserId()
@@ -124,6 +126,7 @@ public class ApplicationsController : ControllerBase
             application.UserId = currentUserId.Value;
             
             var createdApplication = await _applicationRepository.CreateApplicationAsync(application);
+            await _kafkaProducerService.CreateApplicationAsync(createdApplication.Id, currentUserId.Value, createDto.JobId);
             var applicationDto = _mapper.Map<ApplicationDto>(createdApplication);
 
             _logger.LogInformation("Created application {Id} for job {JobId} by user {UserId}",

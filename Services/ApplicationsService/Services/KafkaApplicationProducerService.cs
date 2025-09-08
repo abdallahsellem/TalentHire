@@ -3,20 +3,19 @@ using TalentHire.Shared.Kafka.Models;
 
 namespace TalentHire.Services.ApplicationsService.Services;
 
-public class KafkaApplicationService
+public class KafkaApplicationProducerService
 {
     private readonly IKafkaProducer _kafkaProducer;
-    private readonly ILogger<KafkaApplicationService> _logger;
+    private readonly ILogger<KafkaApplicationProducerService> _logger;
 
-    public KafkaApplicationService(IKafkaProducer kafkaProducer, ILogger<KafkaApplicationService> logger)
+    public KafkaApplicationProducerService(IKafkaProducer kafkaProducer, ILogger<KafkaApplicationProducerService> logger)
     {
         _kafkaProducer = kafkaProducer;
         _logger = logger;
     }
 
-    public async Task CreateApplicationAsync(int userId, int jobId)
+    public async Task CreateApplicationAsync(int applicationId, int userId, int jobId)
     {
-        var applicationId = Guid.NewGuid().ToString();
 
         var applicationEvent = new ApplicationCreatedEvent
         {
@@ -27,7 +26,7 @@ public class KafkaApplicationService
             EventType = "ApplicationCreated"
         };
 
-        await _kafkaProducer.SendAsync("applications-topic", applicationId, applicationEvent);
+        await _kafkaProducer.SendAsync("applications-topic", applicationId.ToString(), applicationEvent);
         _logger.LogInformation("Application created and event published: {ApplicationId}", applicationId);
     }
 }

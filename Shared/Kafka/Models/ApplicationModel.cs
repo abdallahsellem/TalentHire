@@ -11,7 +11,7 @@ public abstract class BaseEvent
 // Order Events
 public class ApplicationCreatedEvent : BaseEvent
 {
-    public string ApplicationId { get; set; } = string.Empty;
+    public int ApplicationId { get; set; } = 0;
     public int UserId { get; set; } = 0;
     public int JobId { get; set; } = 0;
     public string Status { get; set; } = string.Empty;

@@ -7,14 +7,14 @@ WORKDIR /app
 
 # Copy shared library source first
 COPY ["Shared/Kafka/", "Shared/Kafka/"]
-RUN dotnet restore "Shared/Kafka/Kafka.csproj" 
+RUN dotnet restore "Shared/Kafka/Kafka.csproj" --disable-parallel false
 
 # Build shared library
 RUN dotnet build "Shared/Kafka/Kafka.csproj" -c Release
 
 # Copy the ApplicationsService.csproj to root /app directory
 COPY ["Services/ApplicationsService/ApplicationsService.csproj", "./"]
-RUN dotnet restore "ApplicationsService.csproj" 
+RUN dotnet restore "ApplicationsService.csproj" --disable-parallel false
 
 # Copy the rest of the ApplicationsService source code to root /app directory
 COPY ["Services/ApplicationsService/", "./"]

@@ -9,9 +9,9 @@ namespace TalentHire.Services.ApplicationsService.Repositories;
 public class ApplicationRepository : IApplicationRepository
 {
     private readonly ApplicationDbContext _context;
-    private readonly KafkaApplicationService _kafkaService;
+    private readonly KafkaApplicationProducerService _kafkaService;
 
-    public ApplicationRepository(ApplicationDbContext context, KafkaApplicationService kafkaService)
+    public ApplicationRepository(ApplicationDbContext context, KafkaApplicationProducerService kafkaService)
     {
         _context = context;
         _kafkaService = kafkaService;
@@ -56,8 +56,6 @@ public class ApplicationRepository : IApplicationRepository
 
         _context.Applications.Add(application);
         await _context.SaveChangesAsync();
-
-        await _kafkaService.CreateApplicationAsync(application.UserId, application.JobId);
         return application;
     }
 

@@ -27,7 +27,7 @@ builder.Services.AddAutoMapper(typeof(ApplicationMapperProfile));
 // Add Repository
 builder.Services.AddScoped<IApplicationRepository, ApplicationRepository>();
 builder.Services.AddScoped<IKafkaProducer, KafkaProducer>();
-builder.Services.AddScoped<KafkaApplicationService>();
+builder.Services.AddScoped<KafkaApplicationProducerService>();
 
 
 // Add JWT Authentication

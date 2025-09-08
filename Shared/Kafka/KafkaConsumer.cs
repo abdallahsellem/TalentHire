@@ -14,7 +14,7 @@ public abstract class KafkaConsumer<T> : BackgroundService
     private readonly string _topic;
     private readonly string _groupId;
 
-    protected KafkaConsumer(IConfiguration configuration, ILogger logger, string topic, string groupId)
+    protected KafkaConsumer(ILogger logger, string topic, string groupId)
     {
         _logger = logger;
         _topic = topic;
@@ -57,18 +57,21 @@ public abstract class KafkaConsumer<T> : BackgroundService
 
     private async Task ProcessMessage(Message<string, string> message)
     {
+         _logger.LogInformation("Test ****************************************************************");
+         _logger.LogInformation("Message Consumed: {Message}", message.Value);
         try
-        {
-            var eventData = JsonSerializer.Deserialize<T>(message.Value);
-            if (eventData != null)
             {
-                await HandleMessage(message.Key, eventData);
+
+                var eventData = JsonSerializer.Deserialize<T>(message.Value);
+                if (eventData != null)
+                {
+                    await HandleMessage(message.Key, eventData);
+                }
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to process message: {Message}", message.Value);
-        }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to process message: {Message}", message.Value);
+            }
     }
 
     protected abstract Task HandleMessage(string key, T eventData);

@@ -49,19 +49,16 @@ services:
 
   job-service:
     build:
-      context: ./Services/JobService
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./Services/JobService/Dockerfile
     ports:
       - "8081:8081"
     environment:
       - NODE_ENV=development
       - ASPNETCORE_ENVIRONMENT=Development
-    volumes:
-      - ./Services/JobService:/app
-      - /app/bin
-      - /app/obj
     depends_on:
       - job_db
+      - kafka
     networks:
       - app-network
     working_dir: /app
