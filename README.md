@@ -5,6 +5,7 @@ TalentHire is a backend API for a talent management platform built using a micro
 ## 🏗️ Architecture Overview
 
 The application follows a microservices architecture pattern with the following components:
+![alt text](Diagram.png)
 
 ### Core Services
 - **API Gateway** (Port 8080) - Central entry point for all client requests
